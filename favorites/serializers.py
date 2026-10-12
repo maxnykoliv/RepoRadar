@@ -31,6 +31,9 @@ class FavoriteSerializer(serializers.ModelSerializer):
             "html_url",
             "description",
             "created_at",
+            "forks_count",
+            "stars_count",
+            "watchers_count",
         ]
         read_only_fields = ["id", "created_at"]
 
