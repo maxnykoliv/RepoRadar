@@ -167,3 +167,7 @@ search/       GitHub client, caching service, search and clear-cache views
 favorites/    registration, JWT auth wiring, favorites model and API
 frontend/     React + Vite client (built and served by nginx in Docker)
 ```
+
+## License
+
+[MIT](LICENSE)
