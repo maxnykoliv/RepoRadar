@@ -30,10 +30,9 @@ const EMPTY_FORM = {
 };
 
 /**
- * Нормалізує як результат GitHub Search API, так і Favorite із Django.
- * Зберігаємо окремо:
- * - id: внутрішній ID запису Favorite, якщо він є;
- * - repo_id: GitHub ID, який використовується для додавання/видалення.
+ * Normalizes both a GitHub Search API item and a Favorite from the backend.
+ * - id: the Favorite record id, when there is one;
+ * - repo_id: the GitHub repository id, used to add and remove favorites.
  */
 function normalize(repo = {}) {
   const repoId = repo.repo_id ?? repo.repository_id ?? repo.id ?? null;
@@ -45,8 +44,9 @@ function normalize(repo = {}) {
     full_name: repo.full_name || repo.name || "Unknown repository",
     html_url: repo.html_url || "#",
     description: repo.description || "",
-    stargazers_count: repo.stargazers_count ?? repo.stars ?? 0,
-    forks_count: repo.forks_count ?? repo.forks ?? 0,
+    stargazers_count: repo.stargazers_count ?? 0,
+    forks_count: repo.forks_count ?? 0,
+    language: repo.language || "",
   };
 }
 
@@ -125,7 +125,7 @@ export default function App() {
       setError(
         getErrorMessage(
           err,
-          "Не вдалося виконати пошук. Перевірте, чи запущений backend."
+          "Search failed. Make sure the backend is running."
         )
       );
     } finally {
@@ -149,9 +149,9 @@ export default function App() {
     } catch (err) {
       if (err.response?.status === 401) {
         setFavorites([]);
-        setError("Сесія завершилася. Увійдіть у систему ще раз.");
+        setError("Your session has expired. Please log in again.");
       } else {
-        setError(getErrorMessage(err, "Не вдалося завантажити збережене."));
+        setError(getErrorMessage(err, "Could not load your favorites."));
       }
     } finally {
       setFavoritesLoading(false);
@@ -187,7 +187,7 @@ export default function App() {
       });
 
       if (!data?.access) {
-        throw new Error("Backend не повернув access token.");
+        throw new Error("The server did not return an access token.");
       }
 
       localStorage.setItem("access_token", data.access);
@@ -197,13 +197,13 @@ export default function App() {
       setUser({ username: form.username.trim() });
       setModal(false);
       setForm(EMPTY_FORM);
-      setNotice(mode === "register" ? "Акаунт створено. Ви увійшли." : "Ви успішно увійшли.");
+      setNotice(mode === "register" ? "Account created. You are logged in." : "Logged in.");
       setError("");
     } catch (err) {
       setError(
         getErrorMessage(
           err,
-          err.message || "Не вдалося авторизуватися. Перевірте введені дані."
+          err.message || "Could not log in. Check your username and password."
         )
       );
     } finally {
@@ -219,20 +219,20 @@ export default function App() {
     setFavorites([]);
     setTab("search");
     setModal(false);
-    setNotice("Ви вийшли з акаунта.");
+    setNotice("Logged out.");
     setError("");
   }
 
   async function toggleFavorite(repo) {
     if (!user || !localStorage.getItem("access_token")) {
       openAuth("login");
-      setNotice("Увійдіть, щоб зберігати репозиторії.");
+      setNotice("Log in to save repositories.");
       return;
     }
 
     const repoId = getRepoId(repo);
     if (!repoId) {
-      setError("Не вдалося визначити GitHub ID цього репозиторію.");
+      setError("Could not determine this repository's GitHub ID.");
       return;
     }
 
@@ -245,13 +245,16 @@ export default function App() {
         // Backend route is favorites/<int:repo_id>/, so pass the GitHub repo ID.
         await favoritesApi.remove(repoId);
         setFavorites((current) => current.filter((item) => getRepoId(item) !== repoId));
-        setNotice("Репозиторій видалено зі збереженого.");
+        setNotice("Removed from favorites.");
       } else {
         const payload = {
           repo_id: Number(repoId),
           full_name: repo.full_name,
           html_url: repo.html_url,
           description: repo.description || "",
+          stargazers_count: repo.stargazers_count ?? 0,
+          forks_count: repo.forks_count ?? 0,
+          language: repo.language || "",
         };
 
         await favoritesApi.add(payload);
@@ -260,19 +263,19 @@ export default function App() {
           normalize(payload),
           ...current.filter((item) => getRepoId(item) !== repoId),
         ]);
-        setNotice("Репозиторій збережено.");
+        setNotice("Saved to favorites.");
         if (tab === "favorites") await loadFavorites();
       }
     } catch (err) {
       const status = err.response?.status;
       if (status === 401) {
-        setError("Сесія завершилася. Увійдіть у систему ще раз.");
+        setError("Your session has expired. Please log in again.");
       } else if (status === 404 && favIds.has(repoId)) {
         // If backend reports it absent, refresh the list to reconcile UI and server.
         await loadFavorites();
-        setError("Запис не знайдено на сервері. Список збереженого оновлено.");
+        setError("That favorite no longer exists on the server. The list has been refreshed.");
       } else {
-        setError(getErrorMessage(err, "Не вдалося змінити збережене."));
+        setError(getErrorMessage(err, "Could not update favorites."));
       }
     } finally {
       setBusy("");
@@ -282,7 +285,7 @@ export default function App() {
   async function openFavorites() {
     if (!user) {
       openAuth("login");
-      setNotice("Увійдіть, щоб переглядати збережені репозиторії.");
+      setNotice("Log in to see your saved repositories.");
       return;
     }
 
@@ -307,12 +310,12 @@ export default function App() {
           {user ? (
             <>
               <span className="username"><i>{user.username.slice(0, 1).toUpperCase()}</i>{user.username}</span>
-              <button className="btn ghost" onClick={logout}><LogOut size={15} /> Вийти</button>
+              <button className="btn ghost" onClick={logout}><LogOut size={15} /> Log out</button>
             </>
           ) : (
             <>
-              <button className="btn ghost" onClick={() => openAuth("login")}><LogIn size={15} /> Увійти</button>
-              <button className="btn primary" onClick={() => openAuth("register")}><UserPlus size={15} /> Реєстрація</button>
+              <button className="btn ghost" onClick={() => openAuth("login")}><LogIn size={15} /> Log in</button>
+              <button className="btn primary" onClick={() => openAuth("register")}><UserPlus size={15} /> Sign up</button>
             </>
           )}
         </div>
@@ -323,11 +326,11 @@ export default function App() {
           <div>
             <div className="eyebrow"><Sparkles size={14} /> FIND YOUR NEXT FAVORITE REPOSITORY</div>
             <h1>Explore code.<br /><span>Build something.</span></h1>
-            <p>Знаходьте цікаві open-source проєкти, переглядайте їхню статистику та зберігайте улюблені репозиторії.</p>
+            <p>Find interesting open-source projects, compare their stats and keep a list of the ones you like.</p>
             <div className="stats">
               <div><b>GitHub</b><small>OPEN SOURCE</small></div>
-              <div><b>{total.toLocaleString()}</b><small>ЗНАЙДЕНО ПІД ЧАС ПОШУКУ</small></div>
-              <div><b>{favorites.length}</b><small>ЗБЕРЕЖЕНО</small></div>
+              <div><b>{total.toLocaleString()}</b><small>FOUND</small></div>
+              <div><b>{favorites.length}</b><small>SAVED</small></div>
             </div>
           </div>
           <div className="art" aria-hidden="true">
@@ -344,43 +347,38 @@ export default function App() {
 
         <section className="workspace">
           <div className="section-head">
-            <div><small>REPOSITORY EXPLORER</small><h2>Знайдіть свій наступний проєкт</h2></div>
+            <div><small>REPOSITORY EXPLORER</small><h2>Find your next project</h2></div>
             <div className="tabs">
-              <button className={tab === "search" ? "active" : ""} onClick={() => setTab("search")}><Search size={15} /> Пошук</button>
-              <button className={tab === "favorites" ? "active" : ""} onClick={openFavorites}><BookmarkCheck size={15} /> Збережене <b>{favorites.length}</b></button>
+              <button className={tab === "search" ? "active" : ""} onClick={() => setTab("search")}><Search size={15} /> Search</button>
+              <button className={tab === "favorites" ? "active" : ""} onClick={openFavorites}><BookmarkCheck size={15} /> Favorites <b>{favorites.length}</b></button>
             </div>
           </div>
 
           <form className="searchbar" onSubmit={search}>
             <Search size={18} />
             <input
-              aria-label="Пошуковий запит"
+              aria-label="Search query"
               value={query.query}
               onChange={(event) => updateQuery("query", event.target.value)}
-              placeholder="Наприклад, django rest"
+              placeholder="e.g. django rest"
               required
             />
-            <select aria-label="Тип пошуку" value={query.type} onChange={(event) => updateQuery("type", event.target.value)}>
-              <option value="repositories">Репозиторії</option>
-              <option value="users">Користувачі</option>
-              <option value="issues">Issues</option>
-            </select>
             <button className="btn primary" type="submit" disabled={loading}>
               {loading ? <LoaderCircle className="spin" size={16} /> : <Search size={16} />}
-              {loading ? "Пошук..." : "Шукати"}
+              {loading ? "Searching..." : "Search"}
             </button>
           </form>
 
-          {error && <div className="alert error" role="alert"><AlertCircle size={17} /><span>{error}</span><button type="button" aria-label="Закрити повідомлення" onClick={() => setError("")}><X size={15} /></button></div>}
-          {notice && <div className="alert success" role="status"><Check size={17} /><span>{notice}</span><button type="button" aria-label="Закрити повідомлення" onClick={() => setNotice("")}><X size={15} /></button></div>}
+          {error && <div className="alert error" role="alert"><AlertCircle size={17} /><span>{error}</span><button type="button" aria-label="Dismiss message" onClick={() => setError("")}><X size={15} /></button></div>}
+          {notice && <div className="alert success" role="status"><Check size={17} /><span>{notice}</span><button type="button" aria-label="Dismiss message" onClick={() => setNotice("")}><X size={15} /></button></div>}
 
           <div className="results-head">
-            <div><h3>{tab === "favorites" ? "Збережені репозиторії" : "Результати пошуку"}</h3><p>{tab === "favorites" ? `${favorites.length} збережено` : `${total.toLocaleString()} результатів`}</p></div>
+            <div><h3>{tab === "favorites" ? "Saved repositories" : "Search results"}</h3><p>{tab === "favorites" ? `${favorites.length} saved` : `${total.toLocaleString()} results`}</p></div>
             <small>{tab === "favorites" ? "YOUR COLLECTION" : "GITHUB REPOSITORIES"}</small>
           </div>
 
           {((tab === "favorites" && favoritesLoading) || (tab === "search" && loading)) ? (
-            <div className="empty"><LoaderCircle className="spin" size={26} /><b>Завантаження...</b><p>Зачекайте, дані завантажуються.</p></div>
+            <div className="empty"><LoaderCircle className="spin" size={26} /><b>Loading...</b><p>Fetching data, one moment.</p></div>
           ) : visible.length ? (
             <div className="grid">
               {visible.map((repo) => {
@@ -394,8 +392,8 @@ export default function App() {
                       <button
                         className={`star ${saved ? "saved" : ""}`}
                         type="button"
-                        title={saved ? "Видалити зі збереженого" : "Зберегти репозиторій"}
-                        aria-label={saved ? `Видалити ${repo.full_name} зі збереженого` : `Зберегти ${repo.full_name}`}
+                        title={saved ? "Remove from favorites" : "Save repository"}
+                        aria-label={saved ? `Remove ${repo.full_name} from favorites` : `Save ${repo.full_name}`}
                         disabled={Boolean(busy)}
                         onClick={() => toggleFavorite(repo)}
                       >
@@ -405,7 +403,7 @@ export default function App() {
                     <a className="repo-name" href={repo.html_url} target="_blank" rel="noreferrer">
                       {repo.full_name}<ExternalLink size={13} />
                     </a>
-                    <p className="description">{repo.description || "Опис для цього репозиторію відсутній."}</p>
+                    <p className="description">{repo.description || "No description provided."}</p>
                     <div className="meta">
                       <span><Star size={13} /> {(repo.stargazers_count ?? 0).toLocaleString()}</span>
                       <span><GitFork size={13} /> {(repo.forks_count ?? 0).toLocaleString()}</span>
@@ -419,8 +417,8 @@ export default function App() {
           ) : (
             <div className="empty">
               {tab === "favorites" ? <BookmarkCheck size={27} /> : <Search size={27} />}
-              <b>{tab === "favorites" ? "Поки нічого не збережено" : "Немає результатів"}</b>
-              <p>{tab === "favorites" ? "Натисніть зірочку на картці репозиторію, щоб додати його сюди." : "Спробуйте інший пошуковий запит."}</p>
+              <b>{tab === "favorites" ? "Nothing saved yet" : "No results"}</b>
+              <p>{tab === "favorites" ? "Click the star on a repository card to add it here." : "Try a different search query."}</p>
             </div>
           )}
         </section>
@@ -428,7 +426,7 @@ export default function App() {
 
       <footer className="bottom">
         <span><Github size={15} /> RepoRadar</span>
-        <span>Відкривайте проєкти. Зберігайте ідеї.</span>
+        <span>Discover projects. Save ideas.</span>
         <span>Powered by GitHub</span>
       </footer>
 
@@ -437,22 +435,22 @@ export default function App() {
           if (event.target === event.currentTarget) setModal(false);
         }}>
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-            <button className="close" type="button" aria-label="Закрити" onClick={() => setModal(false)}><X size={17} /></button>
+            <button className="close" type="button" aria-label="Close" onClick={() => setModal(false)}><X size={17} /></button>
             <div className="modal-icon">{mode === "register" ? <UserPlus size={23} /> : <LogIn size={23} />}</div>
             <small>REPORADAR ACCOUNT</small>
-            <h2 id="auth-title">{mode === "register" ? "Створити акаунт" : "З поверненням!"}</h2>
-            <p>{mode === "register" ? "Зареєструйтеся, щоб зберігати улюблені репозиторії." : "Увійдіть, щоб відкрити свою колекцію."}</p>
+            <h2 id="auth-title">{mode === "register" ? "Create an account" : "Welcome back!"}</h2>
+            <p>{mode === "register" ? "Sign up to save your favorite repositories." : "Log in to open your collection."}</p>
             <form onSubmit={handleAuth}>
-              <label>Ім’я користувача<input autoComplete="username" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} required /></label>
+              <label>Username<input autoComplete="username" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} required /></label>
               {mode === "register" && <label>Email<input type="email" autoComplete="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} required /></label>}
-              <label>Пароль<input type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} minLength={mode === "register" ? 8 : undefined} required /></label>
+              <label>Password<input type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} minLength={mode === "register" ? 8 : undefined} required /></label>
               <button className="btn primary submit" type="submit" disabled={authLoading}>
                 {authLoading && <LoaderCircle className="spin" size={16} />}
-                {mode === "register" ? "Зареєструватися" : "Увійти"}
+                {mode === "register" ? "Sign up" : "Log in"}
               </button>
             </form>
             <button className="switch" type="button" onClick={() => { setMode(mode === "register" ? "login" : "register"); setForm(EMPTY_FORM); setError(""); }}>
-              {mode === "register" ? "Уже маєте акаунт? Увійти" : "Немає акаунта? Зареєструватися"}
+              {mode === "register" ? "Already have an account? Log in" : "No account yet? Sign up"}
             </button>
           </section>
         </div>
