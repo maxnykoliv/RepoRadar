@@ -6,7 +6,7 @@ import "./styles.css";
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {
-  throw new Error('Не знайдено елемент <div id="root"></div> у index.html.');
+  throw new Error('Missing <div id="root"></div> in index.html.');
 }
 
 createRoot(rootElement).render(
