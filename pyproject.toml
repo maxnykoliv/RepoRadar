@@ -1,0 +1,24 @@
+[project]
+name = "reporadar"
+version = "1.0.0"
+description = "GitHub search with Redis caching and saved favorites: Django REST API and React client"
+requires-python = ">=3.13"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "DJ"]
+# E501: line length is the formatter's job. RUF012: flags idiomatic Django/DRF
+# class attributes (Meta.fields, permission_classes).
+ignore = ["E501", "RUF012"]
+
+[tool.coverage.run]
+source = ["."]
+omit = ["*/migrations/*", "*/tests/*", "*/tests.py", "manage.py", "config/wsgi.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

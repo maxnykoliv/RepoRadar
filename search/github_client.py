@@ -18,7 +18,9 @@ SEARCH_PATHS = {
 
 
 class GitHubClient:
-    def __init__(self, base_url: str | None = None, token: str | None = None, timeout: float | None = None):
+    def __init__(
+        self, base_url: str | None = None, token: str | None = None, timeout: float | None = None
+    ):
         self.base_url = (base_url or settings.GITHUB_API_URL).rstrip("/")
         self.token = settings.GITHUB_TOKEN if token is None else token
         self.timeout = timeout or settings.GITHUB_TIMEOUT

@@ -24,15 +24,21 @@ class SearchResponseSerializer(serializers.Serializer):
     query = serializers.CharField()
     page = serializers.IntegerField()
     per_page = serializers.IntegerField()
-    cached = serializers.BooleanField(help_text="True when served from Redis without calling GitHub.")
+    cached = serializers.BooleanField(
+        help_text="True when served from Redis without calling GitHub."
+    )
     total_count = serializers.IntegerField()
     incomplete_results = serializers.BooleanField()
-    items = serializers.ListField(child=serializers.DictField(), help_text="Raw GitHub result items.")
+    items = serializers.ListField(
+        child=serializers.DictField(), help_text="Raw GitHub result items."
+    )
 
 
 class ClearCacheResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
-    deleted = serializers.IntegerField(allow_null=True, help_text="Entries removed, null if the backend can't tell.")
+    deleted = serializers.IntegerField(
+        allow_null=True, help_text="Entries removed, null if the backend can't tell."
+    )
 
 
 class ErrorSerializer(serializers.Serializer):
