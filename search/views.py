@@ -1,4 +1,5 @@
 from drf_spectacular.utils import OpenApiExample, extend_schema
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -29,7 +30,11 @@ class SearchView(APIView):
             504: ErrorSerializer,
         },
         examples=[
-            OpenApiExample("Search repositories", value={"type": "repositories", "query": "django rest", "per_page": 10}, request_only=True),
+            OpenApiExample(
+                "Search repositories",
+                value={"type": "repositories", "query": "django rest", "per_page": 10},
+                request_only=True,
+            ),
             OpenApiExample(
                 "Response",
                 value={
@@ -40,7 +45,13 @@ class SearchView(APIView):
                     "cached": False,
                     "total_count": 1,
                     "incomplete_results": False,
-                    "items": [{"id": 1, "full_name": "encode/django-rest-framework", "stargazers_count": 28000}],
+                    "items": [
+                        {
+                            "id": 1,
+                            "full_name": "encode/django-rest-framework",
+                            "stargazers_count": 28000,
+                        }
+                    ],
                 },
                 response_only=True,
             ),
@@ -55,11 +66,23 @@ class SearchView(APIView):
 
 
 class ClearCacheView(APIView):
-    @extend_schema(summary="Clear the search cache", request=None, responses={200: ClearCacheResponseSerializer})
+    # Wiping the cache sends every following search to GitHub and burns the
+    # shared rate limit, so it's an operator action, not a public endpoint.
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        summary="Clear the search cache (staff only)",
+        request=None,
+        responses={200: ClearCacheResponseSerializer},
+    )
     def post(self, request):
         return self._clear()
 
-    @extend_schema(summary="Clear the search cache", request=None, responses={200: ClearCacheResponseSerializer})
+    @extend_schema(
+        summary="Clear the search cache (staff only)",
+        request=None,
+        responses={200: ClearCacheResponseSerializer},
+    )
     def delete(self, request):
         return self._clear()
 

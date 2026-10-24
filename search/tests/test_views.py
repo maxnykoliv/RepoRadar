@@ -1,8 +1,9 @@
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import override_settings
-from rest_framework.test import APISimpleTestCase
+from rest_framework.test import APIClient, APISimpleTestCase
 
 from search.exceptions import GitHubRateLimited, GitHubUnavailable
 
@@ -41,13 +42,20 @@ class SearchViewTests(APISimpleTestCase):
     def test_pagination_bounds(self):
         self.assertEqual(self.post(type="users", query="john", page=0).status_code, 400)
         self.assertEqual(self.post(type="users", query="john", per_page=101).status_code, 400)
-        self.assertEqual(self.post(type="users", query="john", page=11, per_page=100).status_code, 400)
+        self.assertEqual(
+            self.post(type="users", query="john", page=11, per_page=100).status_code, 400
+        )
 
     def test_get_not_allowed(self):
         self.assertEqual(self.client.get(self.url).status_code, 405)
 
     def test_trailing_slash_supported(self):
-        self.assertEqual(self.client.post("/api/search/", {"type": "users", "query": "john"}, format="json").status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                "/api/search/", {"type": "users", "query": "john"}, format="json"
+            ).status_code,
+            200,
+        )
 
     def test_malformed_json_rejected(self):
         response = self.client.post(self.url, "{bad", content_type="application/json")
@@ -58,7 +66,14 @@ class SearchViewTests(APISimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {"type": "users", "query": "john", "page": 1, "per_page": 30, "cached": False, **PAYLOAD},
+            {
+                "type": "users",
+                "query": "john",
+                "page": 1,
+                "per_page": 30,
+                "cached": False,
+                **PAYLOAD,
+            },
         )
         self.github.assert_called_once_with("users", "john", 1, 30)
 
@@ -115,6 +130,8 @@ class SearchViewTests(APISimpleTestCase):
 class ClearCacheViewTests(APISimpleTestCase):
     def setUp(self):
         cache.clear()
+        # Unsaved user: APISimpleTestCase has no database access.
+        self.client.force_authenticate(get_user_model()(username="ops", is_staff=True))
         patcher = patch("search.services.github_client.search", return_value=dict(PAYLOAD))
         self.github = patcher.start()
         self.addCleanup(patcher.stop)
@@ -138,3 +155,10 @@ class ClearCacheViewTests(APISimpleTestCase):
 
     def test_get_not_allowed(self):
         self.assertEqual(self.client.get("/api/clear-cache").status_code, 405)
+
+    def test_anonymous_user_rejected(self):
+        self.assertEqual(APIClient().post("/api/clear-cache").status_code, 401)
+
+    def test_non_staff_user_rejected(self):
+        self.client.force_authenticate(get_user_model()(username="bob"))
+        self.assertEqual(self.client.post("/api/clear-cache").status_code, 403)
