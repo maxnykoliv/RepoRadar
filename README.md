@@ -13,6 +13,10 @@ caches results in **Redis** and translates GitHub's failure modes into clear HTT
 errors. JWT-authenticated users can save repositories to their favorites. A
 **React + Vite** client covers the whole flow.
 
+![RepoRadar landing page](docs/screenshots/hero.png)
+
+![Search results with save-to-favorites](docs/screenshots/search.png)
+
 ## Highlights
 
 - **Caching that can't take the service down:** normalized cache keys with a 2-hour TTL. If Redis is unavailable, search keeps working uncached instead of returning errors.
